@@ -241,3 +241,49 @@ test("opened from another machine, the launcher takes magpie web's path, and exp
   // a magpie from before magpie.service: no navigation to a refused 127.0.0.1
   expect(await boot({ ready }, "server.lan")).toBe("")
 })
+
+
+// ---------- 0.1.3 新增：重命名 / 同步宽度 / 空 configDir ----------
+
+test("renaming a conversation via PATCH keeps its messages", async () => {
+  const h = { ...json, origin: "null", "x-magpie-chat-token": token }
+  const saved = JSON.parse((await raw("POST", "/api/conversations", h, { title: "before", messages: [{ role: "user", content: "hi" }] })).body)
+  const renamed = await raw("PATCH", "/api/conversations/" + saved.id, h, { title: "after" })
+  expect(renamed.status).toBe(200)
+  expect(JSON.parse(renamed.body).title).toBe("after")
+  // 关键：改名不能把 messages 清掉（POST 是整份覆盖，PATCH 只动 title）
+  const got = JSON.parse((await raw("GET", "/api/conversations/" + saved.id, h)).body)
+  expect(got.title).toBe("after")
+  expect(got.messages.length).toBe(1)
+  expect(got.messages[0].content).toBe("hi")
+})
+
+test("renaming rejects an empty title, a missing conversation and a missing token", async () => {
+  const h = { ...json, origin: "null", "x-magpie-chat-token": token }
+  const saved = JSON.parse((await raw("POST", "/api/conversations", h, { title: "x", messages: [] })).body)
+  expect((await raw("PATCH", "/api/conversations/" + saved.id, h, { title: "   " })).status).toBe(400)
+  expect((await raw("PATCH", "/api/conversations/c_does_not_exist", h, { title: "x" })).status).toBe(404)
+  expect((await raw("PATCH", "/api/conversations/" + saved.id, { ...json, origin: "null" }, { title: "x" })).status).toBe(403)
+})
+
+test("settings keep syncWidth and clamp composerWidth to 35", async () => {
+  const h = { ...json, origin: "null", "x-magpie-chat-token": token }
+  const saved = JSON.parse((await raw("POST", "/api/settings", h, { syncWidth: true, composerWidth: 10 })).body)
+  expect(saved.syncWidth).toBe(true)
+  expect(saved.composerWidth).toBe(35)
+  const back = JSON.parse((await raw("GET", "/api/settings", h)).body)
+  expect(back.syncWidth).toBe(true)
+  expect(back.composerWidth).toBe(35)
+})
+
+test("an empty configDir is treated as the real one, not a relative path", async () => {
+  const { startServer } = await import("./lib/server.mjs")
+  const svc = await startServer({ configDir: "", options: { port: 0 } })
+  try {
+    expect(typeof svc.port).toBe("number")
+    expect(svc.port).toBeGreaterThan(0)
+  } finally {
+    await svc?.close()
+  }
+})
+
