@@ -243,7 +243,7 @@ test("opened from another machine, the launcher takes magpie web's path, and exp
 })
 
 
-// ---------- 0.1.3 新增：重命名 / 同步宽度 / 空 configDir ----------
+// ---------- added in 0.1.3: renaming / layout sync / empty configDir ----------
 
 test("renaming a conversation via PATCH keeps its messages", async () => {
   const h = { ...json, origin: "null", "x-magpie-chat-token": token }
@@ -251,7 +251,7 @@ test("renaming a conversation via PATCH keeps its messages", async () => {
   const renamed = await raw("PATCH", "/api/conversations/" + saved.id, h, { title: "after" })
   expect(renamed.status).toBe(200)
   expect(JSON.parse(renamed.body).title).toBe("after")
-  // 关键：改名不能把 messages 清掉（POST 是整份覆盖，PATCH 只动 title）
+  // the rename must not wipe messages: POST overwrites the whole file, PATCH only touches the title
   const got = JSON.parse((await raw("GET", "/api/conversations/" + saved.id, h)).body)
   expect(got.title).toBe("after")
   expect(got.messages.length).toBe(1)
@@ -276,14 +276,32 @@ test("settings keep syncWidth and clamp composerWidth to 35", async () => {
   expect(back.composerWidth).toBe(35)
 })
 
-test("an empty configDir is treated as the real one, not a relative path", async () => {
+test("an empty configDir reads the library from the real config folder", async () => {
+  mkdirSync(join(cfg, "library", "instructions"), { recursive: true })
+  writeFileSync(join(cfg, "library", "instructions", "probe.md"), "be brief")
   const { startServer } = await import("./lib/server.mjs")
-  const svc = await startServer({ configDir: "", options: { port: 0 } })
+  const other = await startServer({ configDir: "", options: { port: 0 } })
   try {
-    expect(typeof svc.port).toBe("number")
-    expect(svc.port).toBeGreaterThan(0)
+    const got = await new Promise((resolve, reject) => {
+      const req = request({
+        host: "127.0.0.1",
+        port: other.port,
+        method: "GET",
+        path: "/api/library",
+        headers: { host: `127.0.0.1:${other.port}`, origin: "null", "x-magpie-chat-token": token }
+      }, (res) => {
+        let data = ""
+        res.setEncoding("utf8")
+        res.on("data", (c) => (data += c))
+        res.on("end", () => resolve({ status: res.statusCode, body: data }))
+      })
+      req.on("error", reject)
+      req.end()
+    })
+    expect(got.status).toBe(200)
+    expect(JSON.parse(got.body).instructions.map((i) => i.name)).toContain("probe.md")
   } finally {
-    await svc?.close()
+    await other?.close()
   }
 })
 

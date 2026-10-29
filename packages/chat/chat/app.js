@@ -2250,8 +2250,9 @@ function finish(refs) {
     refs.think.open = false;
   }
   if (refs.dirty) { refs.dirty = false; renderMarkdown(refs.body, refs.msg.content); }
-  // 流式结束时把"稳定块 + 尾巴"的结构换回一次完整渲染，保证格式正确
-  else if (refs.body && refs.body.querySelector(".md-stable")) renderMarkdown(refs.body, refs.msg.content);
+  // 整段一次到达时，流会在一帧内结束：那次 pumpTick 一次都没跑过，dirty 还是 false，
+  // 也没有 .md-stable 结构，正文就一直是空的。所以只要 finish 时有内容就渲染一次。
+  else if (refs.body && refs.msg.content) renderMarkdown(refs.body, refs.msg.content);
   state.liveRefs.delete(refs);
   updateMeta(refs);
   updateSend();
