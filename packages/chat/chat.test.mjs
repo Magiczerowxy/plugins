@@ -4,7 +4,7 @@
 // this service's own Host. Everything here runs against a fake gateway on a
 // free port, with a temporary config folder; nothing reaches the network.
 import { afterAll, beforeAll, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { request } from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -305,3 +305,27 @@ test("an empty configDir reads the library from the real config folder", async (
   }
 })
 
+// ---------- added in 0.1.4 ----------
+
+test("composeSystem drops the user prompt when systemEnabled is false", async () => {
+  const { composeSystem } = await import("./lib/library.mjs")
+  const on = await composeSystem({ system: "PROBE_SYSTEM_TEXT_XYZ", systemEnabled: true })
+  const off = await composeSystem({ system: "PROBE_SYSTEM_TEXT_XYZ", systemEnabled: false })
+  expect(on).toContain("PROBE_SYSTEM_TEXT_XYZ")
+  expect(off).not.toContain("PROBE_SYSTEM_TEXT_XYZ")
+})
+
+test("stdio MCP servers get a workspace of their own", async () => {
+  const { workspaceDir } = await import("./lib/mcp.mjs")
+  const dir = workspaceDir()
+  expect(dir).toContain("magpie-chat")
+  expect(dir).toContain("workspace")
+  expect(existsSync(dir)).toBe(true)
+})
+
+test("the gateway candidates include the port from magpie settings.json", async () => {
+  const { gatewayCandidates } = await import("./lib/gateway.mjs")
+  writeFileSync(join(cfg, "settings.json"), JSON.stringify({ port: 18086 }))
+  const list = gatewayCandidates({})
+  expect(list.some((u) => u.includes(":18086"))).toBe(true)
+})
