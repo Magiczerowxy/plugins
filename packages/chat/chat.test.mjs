@@ -338,8 +338,22 @@ test("the chat UI never auto-loads a remote image", () => {
   const end = app.indexOf("function remoteImgLink")
   expect(start).toBeGreaterThan(0)
   expect(end).toBeGreaterThan(start)
-  // 只允许 data URI；放行 https? 就意味着渲染回复时页面会去拉远程图片
-  expect(app.slice(start, end)).not.toMatch(/https\?:/)
+  // 把函数抽出来真跑一遍：只扫源码里的字面量，换个写法就能绕过去
+  const safeImgSrc = new Function(app.slice(start, end) + "\nreturn safeImgSrc")()
+  const png = "data:image/png;base64,iVBORw0KGgo="
+  expect(safeImgSrc(png)).toBe(png)
+  const svg = "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
+  expect(safeImgSrc(svg)).toBe(svg)
+  for (const bad of [
+    "https://a.png",
+    "HTTPS://a.png",
+    "http://a.png",
+    "//a.png",
+    "blob:https://a.png",
+    "data:text/html;base64,PHNjcmlwdD4=",
+  ]) {
+    expect(safeImgSrc(bad)).toBe("")
+  }
 })
 
 test("finish() renders a reply that arrived in one chunk", () => {
