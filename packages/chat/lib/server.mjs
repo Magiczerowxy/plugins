@@ -286,13 +286,9 @@ function sse(res, type, data) {
 // 工具清单写在 system 里会和 function 定义重复一遍，所以只给一句交代。
 function toolsHint(tools) {
   if (!tools.length) return "";
-  // 告诉模型文件会被存到哪 —— 用户才找得到，也不会误会是 magpie 写的
-  let dir = "";
-  try { dir = workspaceDir(); } catch { /* 拿不到就不提 */ }
-  const where = dir
-    ? "\n\n工具用相对路径读写文件时，工作目录是 `" + dir + "`；要保存或提及文件就用这个目录。"
-    : "";
-  return "# 工具\n\n你可以调用用户配置的 MCP 工具（共 " + tools.length + " 个）。需要时直接调用，不要臆造结果；用不上就直接回答。" + where;
+  // 只说"有工作区"就够了：绝对路径会把本机用户名带进 system prompt，
+  // 而这段文字是发给模型供应商的。服务端的 cwd 已经保证相对路径落在那里。
+  return "# 工具\n\n你可以调用用户配置的 MCP 工具（共 " + tools.length + " 个）。需要时直接调用，不要臆造结果；用不上就直接回答。\n\n工具用相对路径读写文件时，落在对话页自己的工作目录里。"
 }
 
 // 工具的 schema 是提示词里最大的一块：GitHub 那 46 个工具光描述和参数就有上千万字符。

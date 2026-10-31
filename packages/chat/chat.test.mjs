@@ -329,3 +329,21 @@ test("the gateway candidates include the port from magpie settings.json", async 
   const list = gatewayCandidates({})
   expect(list.some((u) => u.includes(":18086"))).toBe(true)
 })
+
+// ---------- review feedback ----------
+
+test("the chat UI never auto-loads a remote image", () => {
+  const app = readFileSync(join(dir, "chat", "app.js"), "utf8")
+  const start = app.indexOf("function safeImgSrc")
+  const end = app.indexOf("function remoteImgLink")
+  expect(start).toBeGreaterThan(0)
+  expect(end).toBeGreaterThan(start)
+  // 只允许 data URI；放行 https? 就意味着渲染回复时页面会去拉远程图片
+  expect(app.slice(start, end)).not.toMatch(/https\?:/)
+})
+
+test("finish() renders a reply that arrived in one chunk", () => {
+  const app = readFileSync(join(dir, "chat", "app.js"), "utf8")
+  // 不能只判 .md-stable：整段一次到达时那个结构根本不存在
+  expect(app).toMatch(/else if \(refs\.body && refs\.msg\.content\) renderMarkdown\(refs\.body, refs\.msg\.content\)/)
+})

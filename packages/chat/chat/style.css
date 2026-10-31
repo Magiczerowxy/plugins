@@ -728,6 +728,13 @@ input, textarea { font: inherit; color: inherit; }
   cursor: zoom-in;
   object-fit: contain;
 }
+.md-img-link {
+  display: inline-block;
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--accent);
+  word-break: break-all;
+}
 .md-img-fail {
   display: inline-flex;
   flex-wrap: wrap;

